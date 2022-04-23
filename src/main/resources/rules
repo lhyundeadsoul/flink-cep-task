@@ -1,0 +1,1 @@
+{"ruleId":1,"ruleState":"ACTIVE","windowMinutes":2,"groupingKeyNames":"t_group","aggregatorFunctionType":"SUM","aggregateFieldName":"cpu_usage","LimitOperatorType":"GREATER","limit":11}
