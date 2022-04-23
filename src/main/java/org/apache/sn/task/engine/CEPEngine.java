@@ -1,6 +1,5 @@
 package org.apache.sn.task.engine;
 
-import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.api.common.state.BroadcastState;
 import org.apache.flink.api.common.state.MapState;
@@ -11,11 +10,14 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.co.KeyedBroadcastProcessFunction;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
+import org.apache.sn.task.engine.window.AllWindowAssigner;
+import org.apache.sn.task.engine.window.SlidingWindowAssigner;
+import org.apache.sn.task.engine.window.TumblingWindowAssigner;
+import org.apache.sn.task.engine.window.WindowAssigner;
 import org.apache.sn.task.model.Metric;
 import org.apache.sn.task.model.Rule;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -27,9 +29,15 @@ import java.util.stream.Collectors;
  * 3. msg: message would be filtered and grouped
  * 4. msg: each message goes through all rules
  * 5. agg: window finish -> compare result -> sink
- * 6. eventTime?
- * <p>
- * UnitTest
+ *
+ * Data Structure:
+ *   metric -->  rule1 --> group1 --> windowAssigner(origin value list) --> window1(max/min/sum)(trigger1)
+ *             |     |                                              `---> window2 (avg)(trigger2)
+ *             |      `--> group2 --> windowAssigner(origin value list) --> window3(trigger3)
+ *             |                                                    `---> window4(trigger4)
+ *             `rule2 --> group3 --> windowAssigner(origin value list) --> window5(trigger5)
+ *             |
+ *             `rule3 --> ....
  */
 public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rule, BigDecimal> {
     // handle for value state(Use List here, because you don't know the number of parameters that aggr_function needs, e.g. AVG ==> List[0]=sum, List[1]=num, avg=sum/num)
@@ -53,79 +61,37 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
             //if hit,calculate and update the value of state
             Rule rule = ruleEntry.getValue();
             if (isHit(value, rule)) {
-                try {
-                    //get groupId (ruleId+groupK1+groupK2)
-                    String groupId = rule.getRuleId() + "_" + StringUtils.join(rule.getGroupingKeyNames().stream().map(value::getTag).collect(Collectors.toList()), "_");
-                    //get old value and calculate new value
-                    List<BigDecimal> newValue = calcUpdateValue(
-                            valueMapState.get(groupId),
-                            rule.getAggregatorFunctionType(),
-                            value.getMetric(rule.getAggregateFieldName())
-                    );
-                    //update
-                    valueMapState.put(groupId, newValue);
-                    //then, compare and sink if necessary
-                    BigDecimal finalValue = calcFinalValue(rule.getAggregatorFunctionType(), newValue);
-                    if (rule.apply(finalValue)) {
-                        out.collect(finalValue);
-                        //todo window?
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
+                //get groupId (ruleId+groupK1+groupK2)
+                String groupId = rule.getRuleId() + "_" + StringUtils.join(rule.getGroupingKeyNames().stream().map(value::getTag).collect(Collectors.toList()), "_");
+                //get window assigner
+                WindowAssigner<Metric> windowAssigner;
+                if (rule.getWindowAssignerMap().containsKey(groupId)) {
+                    windowAssigner = rule.getWindowAssignerMap().get(groupId);
+                } else {
+                    windowAssigner = createWindowAssigner(rule);
+                    rule.getWindowAssignerMap().putIfAbsent(groupId, windowAssigner);
                 }
+                //assign window , calculate and collect result
+                windowAssigner
+                        .assignWindow(value)
+                        .stream()
+                        .filter(window -> rule.apply(window.result()))
+                        .forEach(window -> out.collect(window.result()));
             }
         });
 
     }
 
-    /**
-     * calculate the final value which is used to compare
-     *
-     * @param aggregatorFunctionType aggrType
-     * @param newValue               new value
-     * @return final value
-     */
-    private BigDecimal calcFinalValue(Rule.AggregatorFunctionType aggregatorFunctionType, List<BigDecimal> newValue) {
-        BigDecimal finalValue;
-        if (Rule.AggregatorFunctionType.AVG.equals(aggregatorFunctionType)) {
-            finalValue = newValue.get(0).divide(newValue.get(1), RoundingMode.CEILING);
+    private WindowAssigner<Metric> createWindowAssigner(Rule rule) {
+        WindowAssigner<Metric> windowAssigner;
+        if (StringUtils.equals(rule.getWindowType(), "tumbling")) {
+            windowAssigner = new TumblingWindowAssigner<>(rule);
+        } else if (StringUtils.equals(rule.getWindowType(), "sliding")) {
+            windowAssigner = new SlidingWindowAssigner<>(rule);
         } else {
-            finalValue = newValue.get(0);
+            windowAssigner = new AllWindowAssigner<>(rule);
         }
-        return finalValue;
-    }
-
-    /**
-     * calculate the value for update MapState
-     *
-     * @param currentValueList       current
-     * @param aggregatorFunctionType aggrType
-     * @param deltaValue             delta
-     * @return new value for update
-     */
-    private List<BigDecimal> calcUpdateValue(List<BigDecimal> currentValueList, Rule.AggregatorFunctionType aggregatorFunctionType, BigDecimal deltaValue) {
-        if (Objects.isNull(currentValueList)) {
-            currentValueList = Lists.newArrayList();
-            currentValueList.add(BigDecimal.ZERO);
-            currentValueList.add(BigDecimal.ZERO);
-        }
-        switch (aggregatorFunctionType) {
-            case AVG:
-                currentValueList.set(0, currentValueList.get(0).add(deltaValue));
-                currentValueList.set(1, currentValueList.get(1).add(BigDecimal.ONE));
-                return currentValueList;
-            case MAX:
-                currentValueList.set(0, currentValueList.get(0).max(deltaValue));
-                return currentValueList;
-            case MIN:
-                currentValueList.set(0, currentValueList.get(0).min(deltaValue));
-                return currentValueList;
-            case SUM:
-                currentValueList.set(0, currentValueList.get(0).add(deltaValue));
-                return currentValueList;
-            default:
-                throw new RuntimeException("Unknown aggregatorFunctionType: " + aggregatorFunctionType);
-        }
+        return windowAssigner;
     }
 
     private boolean isHit(Metric metric, Rule rule) {
@@ -137,11 +103,12 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
     @Override
     public void processBroadcastElement(Rule rule, KeyedBroadcastProcessFunction<String, Metric, Rule, BigDecimal>.Context ctx, Collector<BigDecimal> out) throws Exception {
         BroadcastState<Integer, Rule> bcState = ctx.getBroadcastState(patternDesc);
+        //remove the rule's data and resource when state is delete
         if (Objects.equals(Rule.RuleState.DELETE, rule.getRuleState())) {
+            bcState.get(rule.getRuleId()).getWindowAssignerMap().clear();
             bcState.remove(rule.getRuleId());
         } else {//active and pause is still in the state
             bcState.put(rule.getRuleId(), rule);
         }
-        //todo reset window?
     }
 }

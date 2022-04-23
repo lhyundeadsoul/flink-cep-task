@@ -2,15 +2,20 @@ package org.apache.sn.task.model;
 
 import lombok.Data;
 import org.apache.flink.api.common.time.Time;
+import org.apache.sn.task.engine.window.WindowAssigner;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Data
 public class Rule {
     private Integer ruleId;
     private RuleState ruleState;
     private Integer windowMinutes;
+    private Integer windowSlideMinute;
+    private String windowType;
+    private Map<String,WindowAssigner<Metric>> windowAssignerMap;
     // Group by {@link Metric#getTag(String)}
     private List<String> groupingKeyNames;
     private AggregatorFunctionType aggregatorFunctionType;
@@ -21,6 +26,9 @@ public class Rule {
 
     public Long getWindowMillis() {
         return Time.minutes(this.windowMinutes).toMilliseconds();
+    }
+    public Long getWindowSlideMillis() {
+        return Time.minutes(this.windowSlideMinute).toMilliseconds();
     }
 
     /**
@@ -54,10 +62,23 @@ public class Rule {
     }
 
     public enum AggregatorFunctionType {
-        SUM,
-        AVG,
-        MIN,
-        MAX
+        SUM(Boolean.FALSE),
+        AVG(Boolean.TRUE),
+        MIN(Boolean.FALSE),
+        MAX(Boolean.FALSE);
+        private final boolean needAllElements;
+
+        AggregatorFunctionType(boolean needAllElements) {
+            this.needAllElements = needAllElements;
+        }
+
+        public boolean noNeedAllElements() {
+            return !isNeedAllElements();
+        }
+        public boolean isNeedAllElements() {
+            return needAllElements;
+        }
+
     }
 
     public enum LimitOperatorType {
