@@ -15,7 +15,6 @@ import java.util.TreeMap;
  * Just a normal window which only has :
  * 1. begin/end timestamp
  * 2. aggr type
- * 3. aggr trigger
  */
 @Data
 public class Window {
