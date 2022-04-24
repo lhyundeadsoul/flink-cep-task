@@ -9,7 +9,7 @@ import java.util.List;
 public class AllWindowAssigner<IN extends Metric> extends WindowAssigner<IN> {
     private boolean isNoWindow = Boolean.TRUE;
     public AllWindowAssigner(Rule rule) {
-        super(rule);
+        super(rule, out);
     }
 
     @Override

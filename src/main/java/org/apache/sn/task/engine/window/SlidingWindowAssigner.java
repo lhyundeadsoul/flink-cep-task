@@ -11,7 +11,7 @@ public class SlidingWindowAssigner<IN extends Metric> extends WindowAssigner<IN>
     private long latestTimestamp = Long.MAX_VALUE;
 
     public SlidingWindowAssigner(Rule rule) {
-        super(rule);
+        super(rule, out);
     }
 
     @Override

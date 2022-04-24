@@ -1,16 +1,18 @@
 package org.apache.sn.task.engine.window;
 
 import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
+import org.apache.flink.util.Collector;
 import org.apache.sn.task.model.Metric;
 import org.apache.sn.task.model.Rule;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public class TumblingWindowAssigner<IN extends Metric> extends WindowAssigner<IN> {
     private long earliestTimestamp = Long.MIN_VALUE;
 
-    public TumblingWindowAssigner(Rule rule) {
-        super(rule);
+    public TumblingWindowAssigner(Rule rule, Collector<BigDecimal> out) {
+        super(rule, out);
     }
 
     @Override

@@ -32,6 +32,7 @@ public class CEPTaskRunner {
         BroadcastStream<Rule> ruleBroadcastStream = ruleStream
                 .map(CEPTaskRunner::parseRule).name("parseRule")
                 .broadcast(ruleStateDescriptor);
+        //join the metric stream and rule stream
         metricStream
                 .keyBy(metric -> StringUtils.join(metric.getTags().values(), "_"))
                 .connect(ruleBroadcastStream)

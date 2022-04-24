@@ -2,7 +2,6 @@ package org.apache.sn.task.engine.window;
 
 import lombok.Data;
 import org.apache.commons.collections.MapUtils;
-import org.apache.sn.task.engine.trigger.Trigger;
 import org.apache.sn.task.model.Metric;
 import org.apache.sn.task.model.Rule;
 
@@ -11,12 +10,17 @@ import java.math.RoundingMode;
 import java.util.Objects;
 import java.util.TreeMap;
 
+/**
+ * Just a normal window which only has :
+ * 1. begin/end timestamp
+ * 2. aggr type
+ * 3. aggr trigger
+ */
 @Data
 public class Window {
     public Window(long beginTimestamp, long endTimestamp, Rule.AggregatorFunctionType aggregatorFunctionType, WindowAssigner<? extends Metric> windowAssigner) {
         this.beginTimestamp = beginTimestamp;
         this.endTimestamp = endTimestamp;
-        this.trigger = trigger;
         this.aggregatorFunctionType = aggregatorFunctionType;
         this.windowAssigner = windowAssigner;
     }
@@ -24,26 +28,33 @@ public class Window {
     private WindowAssigner<? extends Metric> windowAssigner;
     private long beginTimestamp;
     private long endTimestamp;
-    private Trigger trigger;
     private Rule.AggregatorFunctionType aggregatorFunctionType;
     private BigDecimal result;
 
     /**
      * receive value for this window
-     *
+     * NeedAllElement aggr(e.g. AVG) store the value in originValues and calculate later
+     * DO NOT NeedAllElement aggr(e.g. sum/max/min) calculate right now
      * @param input     value
      */
-    public void receive(BigDecimal input) {
+    public void receive(Metric input) {
+        String aggregateFieldName = getWindowAssigner().getRule().getAggregateFieldName();
         if (aggregatorFunctionType.noNeedAllElements()) {
-            result = aggr(result, input);
+            result = aggregate(result, input.getMetric(aggregateFieldName));
+        } else {
+            windowAssigner.getOriginValues().put(input.getEventTime(), input.getMetric(aggregateFieldName));
         }
-        //else do nothing
     }
 
+    /**
+     * get and output the result
+     * @return result
+     */
     public BigDecimal result() {
         if (aggregatorFunctionType.isNeedAllElements()) {
-            return aggrWithOriginValues(windowAssigner.originValues, aggregatorFunctionType);
+            result = aggrWithOriginValues(windowAssigner.getOriginValues(), aggregatorFunctionType);
         }
+        getWindowAssigner().getOut().collect(result);
         return result;
     }
 
@@ -79,7 +90,7 @@ public class Window {
      * @param deltaValue   delta
      * @return new value for update
      */
-    public BigDecimal aggr(BigDecimal currentValue, BigDecimal deltaValue) {
+    public BigDecimal aggregate(BigDecimal currentValue, BigDecimal deltaValue) {
         switch (aggregatorFunctionType) {
 //            case AVG:  avg
 //                currentValue.set(0, currentValue.get(0).add(deltaValue));
