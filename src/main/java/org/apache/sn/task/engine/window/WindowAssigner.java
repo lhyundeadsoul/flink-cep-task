@@ -73,7 +73,7 @@ public abstract class WindowAssigner<IN extends Metric> {
                 .collect(Collectors.toList());
     }
 
-    Rule getRule() {
+    public Rule getRule() {
         return rule;
     }
 

@@ -2,6 +2,7 @@ package org.apache.sn.task.engine.window;
 
 import lombok.Data;
 import org.apache.commons.collections.MapUtils;
+import org.apache.flink.util.Collector;
 import org.apache.sn.task.model.Metric;
 import org.apache.sn.task.model.Rule;
 
@@ -47,19 +48,24 @@ public class Window {
     }
 
     /**
-     * get and output the result
+     * get, compare and output the result
      * @return result
      */
     public BigDecimal result() {
+        //get result
         if (aggregatorFunctionType.isNeedAllElements()) {
             result = aggrWithOriginValues(windowAssigner.getOriginValues(), aggregatorFunctionType);
         }
-        getWindowAssigner().getOut().collect(result);
+        Collector<BigDecimal> out = getWindowAssigner().getOut();
+        // compare and output
+        if (getWindowAssigner().getRule().apply(result) && Objects.nonNull(out)) {
+            out.collect(result);
+        }
         return result;
     }
 
     public boolean isHit(long timestamp) {
-        return timestamp > beginTimestamp && timestamp < endTimestamp;
+        return timestamp >= beginTimestamp && timestamp < endTimestamp;
     }
 
     /**
@@ -91,6 +97,12 @@ public class Window {
      * @return new value for update
      */
     public BigDecimal aggregate(BigDecimal currentValue, BigDecimal deltaValue) {
+        if (Objects.isNull(currentValue)) {
+            currentValue = BigDecimal.ZERO;
+        }
+        if (Objects.isNull(deltaValue)) {
+            deltaValue = BigDecimal.ZERO;
+        }
         switch (aggregatorFunctionType) {
 //            case AVG:  avg
 //                currentValue.set(0, currentValue.get(0).add(deltaValue));

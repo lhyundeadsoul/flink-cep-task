@@ -71,13 +71,8 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
             if (isHit(value, rule)) {
                 //get groupId (ruleId+groupK1+groupK2)
                 String groupId = getGroupId(value, rule);
-                //get window assigner
-                // assign window , aggregate and collect result
-                getWindowAssigner(rule, groupId, out)
-                        .assignWindow(value)
-                        .stream()
-                        .filter(window -> rule.apply(window.result()))
-                        .forEach(window -> out.collect(window.result()));
+                //get window assigner and assign window
+                getWindowAssigner(rule, groupId, out).assignWindow(value);
             }
         });
 
@@ -142,9 +137,9 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
         if (StringUtils.equals(rule.getWindowType(), "tumbling")) {
             windowAssigner = new TumblingWindowAssigner<>(rule, out);
         } else if (StringUtils.equals(rule.getWindowType(), "sliding")) {
-            windowAssigner = new SlidingWindowAssigner<>(rule);
+            windowAssigner = new SlidingWindowAssigner<>(rule, out);
         } else {
-            windowAssigner = new AllWindowAssigner<>(rule);
+            windowAssigner = new AllWindowAssigner<>(rule, out);
         }
         return windowAssigner;
     }
