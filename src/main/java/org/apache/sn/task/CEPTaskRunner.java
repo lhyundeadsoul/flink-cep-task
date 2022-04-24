@@ -3,9 +3,12 @@ package org.apache.sn.task;
 import com.alibaba.fastjson.JSONObject;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.MapStateDescriptor;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -16,21 +19,25 @@ import org.apache.sn.task.model.Rule;
 
 import java.math.BigDecimal;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 public class CEPTaskRunner {
 
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(new Configuration());
-//        env.setRestartStrategy(RestartStrategies.failureRateRestart(3, Time.of(4, TimeUnit.MINUTES), Time.of(10,TimeUnit.SECONDS)));
-//        env.enableCheckpointing(5000);
+        env.setStateBackend(new FsStateBackend("file:///Users/lihongyuinfo/Sources/flink-cep-task/checkpoints"));
+        env.setRestartStrategy(RestartStrategies.failureRateRestart(3, Time.of(4, TimeUnit.MINUTES), Time.of(10,TimeUnit.SECONDS)));
+        env.enableCheckpointing(30000);
         DataStreamSource<String> metricSource = env.socketTextStream("127.0.0.1", 9999);
         SingleOutputStreamOperator<Metric> metricStream = metricSource
-                .map(CEPTaskRunner::parseMetric).name("parseMetric").filter(Objects::nonNull);
+                .map(CEPTaskRunner::parseMetric).name("parseMetric")
+                .filter(Objects::nonNull);
 
-        MapStateDescriptor<Integer, Rule> ruleStateDescriptor = new MapStateDescriptor<>("rules", Types.INT, Types.POJO(Rule.class));
+        MapStateDescriptor<Integer, Rule> ruleStateDescriptor = new MapStateDescriptor<>("rules-desc", Types.INT, Types.POJO(Rule.class));
         DataStreamSource<String> ruleStream = env.socketTextStream("127.0.0.1", 8888);
         BroadcastStream<Rule> ruleBroadcastStream = ruleStream
                 .map(CEPTaskRunner::parseRule).name("parseRule")
+                .filter(rule -> Objects.nonNull(rule))
                 .broadcast(ruleStateDescriptor);
         //join the metric stream and rule stream
         metricStream
@@ -44,13 +51,7 @@ public class CEPTaskRunner {
 
     @SneakyThrows
     private static Rule parseRule(String line) {
-        Rule rule;
-        try {
-            rule = JSONObject.parseObject(line, Rule.class);
-        } catch (Exception e) {
-            rule = null;
-        }
-        return rule;
+        return JSONObject.parseObject(line, Rule.class);
     }
 
     @SneakyThrows

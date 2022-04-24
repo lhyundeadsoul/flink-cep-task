@@ -2,6 +2,7 @@ package org.apache.sn.task.model;
 
 import lombok.Data;
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.shaded.guava18.com.google.common.collect.Maps;
 import org.apache.sn.task.engine.window.WindowAssigner;
 
 import java.math.BigDecimal;
@@ -15,7 +16,7 @@ public class Rule {
     private Integer windowMinutes;
     private Integer windowSlideMinute;
     private String windowType;
-    private Map<String,WindowAssigner<Metric>> windowAssignerMap;
+    private Map<String,WindowAssigner<Metric>> windowAssignerMap = Maps.newHashMap();
     // Group by {@link Metric#getTag(String)}
     private List<String> groupingKeyNames;
     private AggregatorFunctionType aggregatorFunctionType;

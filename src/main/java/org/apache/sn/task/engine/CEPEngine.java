@@ -1,8 +1,8 @@
 package org.apache.sn.task.engine;
 
+import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.api.common.state.BroadcastState;
-import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.state.ReadOnlyBroadcastState;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -18,7 +18,7 @@ import org.apache.sn.task.model.Metric;
 import org.apache.sn.task.model.Rule;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -41,15 +41,12 @@ import java.util.stream.Collectors;
  *  all the window from one window assigner share the same origin value list(if needed)
  */
 public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rule, BigDecimal> {
-    // handle for value state(Use List here, because you don't know the number of parameters that aggr_function needs, e.g. AVG ==> List[0]=sum, List[1]=num, avg=sum/num)
-    MapState<String, List<BigDecimal>> valueMapState;
     // broadcast state descriptor
     MapStateDescriptor<Integer, Rule> patternDesc;
 
     @Override
     public void open(Configuration conf) {
-        valueMapState = getRuntimeContext().getMapState(new MapStateDescriptor<>("values", Types.STRING, Types.LIST(Types.BIG_DEC)));
-        patternDesc = new MapStateDescriptor<>("rules", Types.INT, Types.POJO(Rule.class));
+        patternDesc = new MapStateDescriptor<>("rules-desc", Types.INT, Types.POJO(Rule.class));
     }
 
     /**
@@ -112,16 +109,17 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
      * get window assigner for the group
      * @param rule rule
      * @param groupId groupId
-     * @param out
+     * @param out output pipeline
      * @return window assigner
      */
     private WindowAssigner<Metric> getWindowAssigner(Rule rule, String groupId, Collector<BigDecimal> out) {
         WindowAssigner<Metric> windowAssigner;
-        if (rule.getWindowAssignerMap().containsKey(groupId)) {
-            windowAssigner = rule.getWindowAssignerMap().get(groupId);
+        Map<String, WindowAssigner<Metric>> windowAssignerMap = rule.getWindowAssignerMap();
+        if (MapUtils.isNotEmpty(windowAssignerMap) && windowAssignerMap.containsKey(groupId)) {
+            windowAssigner = windowAssignerMap.get(groupId);
         } else {
             windowAssigner = createWindowAssigner(rule, out);
-            rule.getWindowAssignerMap().putIfAbsent(groupId, windowAssigner);
+            windowAssignerMap.putIfAbsent(groupId, windowAssigner);
         }
         return windowAssigner;
     }
@@ -129,7 +127,7 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
     /**
      * create window assigner by the rule config
      * @param rule rule
-     * @param out
+     * @param out output pipeline
      * @return new window assigner
      */
     private WindowAssigner<Metric> createWindowAssigner(Rule rule, Collector<BigDecimal> out) {

@@ -12,7 +12,10 @@ public class Trigger {
     }
 
     public void trigger(){
+        //calculate result
         window.result();
+        //evict window
+        window.getWindowAssigner().getWindowList().remove(window);
     }
 
     public Long getTimestamp() {

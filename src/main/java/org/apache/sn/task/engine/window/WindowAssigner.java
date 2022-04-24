@@ -23,6 +23,7 @@ public abstract class WindowAssigner<IN extends Metric> {
      * get window config by this rule
      */
     Rule rule;
+
     /**
      * windows created by this assigner
      */
@@ -37,11 +38,11 @@ public abstract class WindowAssigner<IN extends Metric> {
      * origin value storage for each window
      */
     final TreeMap<Long, BigDecimal> originValues = new TreeMap<>();
+
     public WindowAssigner(Rule rule, Collector<BigDecimal> out) {
         this.rule = rule;
         this.out = out;
     }
-
     /**
      * create window for the input value if necessary
      * @param in  input value
@@ -75,6 +76,10 @@ public abstract class WindowAssigner<IN extends Metric> {
 
     public Rule getRule() {
         return rule;
+    }
+
+    public List<Window> getWindowList() {
+        return windowList;
     }
 
     TreeMap<Long, BigDecimal> getOriginValues() {

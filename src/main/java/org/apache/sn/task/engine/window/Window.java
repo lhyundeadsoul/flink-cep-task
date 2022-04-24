@@ -73,7 +73,7 @@ public class Window {
      *
      * @param originValues           origin values
      * @param aggregatorFunctionType aggr type
-     * @return
+     * @return result calculated by origin values
      */
     private BigDecimal aggrWithOriginValues(TreeMap<Long, BigDecimal> originValues, Rule.AggregatorFunctionType aggregatorFunctionType) {
         if (Objects.equals(aggregatorFunctionType, Rule.AggregatorFunctionType.AVG) && MapUtils.isNotEmpty(originValues)) {
@@ -98,7 +98,11 @@ public class Window {
      */
     public BigDecimal aggregate(BigDecimal currentValue, BigDecimal deltaValue) {
         if (Objects.isNull(currentValue)) {
-            currentValue = BigDecimal.ZERO;
+            if (Objects.equals(aggregatorFunctionType, Rule.AggregatorFunctionType.MIN)){
+                currentValue = BigDecimal.valueOf(Long.MAX_VALUE);
+            } else {
+                currentValue = BigDecimal.ZERO;
+            }
         }
         if (Objects.isNull(deltaValue)) {
             deltaValue = BigDecimal.ZERO;
