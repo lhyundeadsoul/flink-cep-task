@@ -96,7 +96,7 @@ public class Window {
      * @param deltaValue   delta
      * @return new value for update
      */
-    public BigDecimal aggregate(BigDecimal currentValue, BigDecimal deltaValue) {
+    private BigDecimal aggregate(BigDecimal currentValue, BigDecimal deltaValue) {
         if (Objects.isNull(currentValue)) {
             if (Objects.equals(aggregatorFunctionType, Rule.AggregatorFunctionType.MIN)){
                 currentValue = BigDecimal.valueOf(Long.MAX_VALUE);

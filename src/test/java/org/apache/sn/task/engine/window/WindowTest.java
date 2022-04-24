@@ -51,13 +51,4 @@ public class WindowTest {
         assertThat(window.isHit(metric1.getEventTime())).isEqualTo(false);
     }
 
-    @Test
-    public void testAggregate() {
-        Rule rule = new Rule();
-        rule.setAggregateFieldName("cpu");
-        WindowAssigner<? extends Metric> windowAssigner = new TumblingWindowAssigner<>(rule, null);
-        Window window = new Window(1, 10, Rule.AggregatorFunctionType.SUM, windowAssigner);
-        BigDecimal aggregate = window.aggregate(BigDecimal.valueOf(5), BigDecimal.valueOf(7));
-        assertThat(aggregate).isEqualTo(BigDecimal.valueOf(12));
-    }
 }

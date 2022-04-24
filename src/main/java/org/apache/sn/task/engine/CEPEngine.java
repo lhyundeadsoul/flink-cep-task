@@ -29,16 +29,16 @@ import java.util.stream.Collectors;
  * 3. msg: message would be filtered and grouped
  * 4. msg: each message goes through all rules
  * 5. agg: window finish -> compare result -> sink
- *
+ * <p>
  * Data Structure:
- *   metric -->  rule1 --> group1 --> windowAssigner(origin value list) --> window1(max/min/sum)(trigger1)
- *             |     |                                              `---> window2 (avg)(trigger2)
- *             |      `--> group2 --> windowAssigner(origin value list) --> window3(trigger3)
- *             |                                                    `---> window4(trigger4)
- *             `rule2 --> group3 --> windowAssigner(origin value list) --> window5(trigger5)
- *             |
- *             `rule3 --> ....
- *  all the window from one window assigner share the same origin value list(if needed)
+ * metric -->  rule1 --> group1 --> windowAssigner(origin value list) --> window1(max/min/sum)(trigger1)
+ * |     |                                              `---> window2 (avg)(trigger2)
+ * |      `--> group2 --> windowAssigner(origin value list) --> window3(trigger3)
+ * |                                                    `---> window4(trigger4)
+ * `rule2 --> group3 --> windowAssigner(origin value list) --> window5(trigger5)
+ * |
+ * `rule3 --> ....
+ * all the window from one window assigner share the same origin value list(if needed)
  */
 public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rule, BigDecimal> {
     // broadcast state descriptor
@@ -51,9 +51,10 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
 
     /**
      * deal with the metric value
+     *
      * @param value metric value
-     * @param ctx broadcast context
-     * @param out output pipeline
+     * @param ctx   broadcast context
+     * @param out   output pipeline
      * @throws Exception exception
      */
     @Override
@@ -65,7 +66,7 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
             Preconditions.checkNotNull(ruleEntry, "rule entry must not be null");
             //if hit,calculate and update the value of state
             Rule rule = ruleEntry.getValue();
-            if (isHit(value, rule)) {
+            if (Objects.nonNull(rule) && rule.isHit(value)) {
                 //get groupId (ruleId+groupK1+groupK2)
                 String groupId = getGroupId(value, rule);
                 //get window assigner and assign window
@@ -77,9 +78,10 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
 
     /**
      * deal with the rule data
+     *
      * @param rule rule value
-     * @param ctx broadcast context
-     * @param out output
+     * @param ctx  broadcast context
+     * @param out  output
      * @throws Exception exception
      */
     @Override
@@ -97,8 +99,9 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
 
     /**
      * groupId = ruleId + groupKey1 + groupKey2 +...
+     *
      * @param value the metric value
-     * @param rule rule
+     * @param rule  rule
      * @return groupId
      */
     private String getGroupId(Metric value, Rule rule) {
@@ -107,9 +110,10 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
 
     /**
      * get window assigner for the group
-     * @param rule rule
+     *
+     * @param rule    rule
      * @param groupId groupId
-     * @param out output pipeline
+     * @param out     output pipeline
      * @return window assigner
      */
     private WindowAssigner<Metric> getWindowAssigner(Rule rule, String groupId, Collector<BigDecimal> out) {
@@ -126,8 +130,9 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
 
     /**
      * create window assigner by the rule config
+     *
      * @param rule rule
-     * @param out output pipeline
+     * @param out  output pipeline
      * @return new window assigner
      */
     private WindowAssigner<Metric> createWindowAssigner(Rule rule, Collector<BigDecimal> out) {
@@ -142,15 +147,4 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
         return windowAssigner;
     }
 
-    /**
-     * if the metric value can hit the rule
-     * @param metric metric value
-     * @param rule the rule
-     * @return yes or not
-     */
-    private boolean isHit(Metric metric, Rule rule) {
-        Preconditions.checkNotNull(metric, "metric must not be null");
-        Preconditions.checkNotNull(rule, "rule " + rule + " must not be null");
-        return Objects.equals(Rule.RuleState.ACTIVE, rule.getRuleState()) && metric.getTags().keySet().containsAll(rule.getGroupingKeyNames());
-    }
 }

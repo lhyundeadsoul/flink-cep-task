@@ -3,11 +3,13 @@ package org.apache.sn.task.model;
 import lombok.Data;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.shaded.guava18.com.google.common.collect.Maps;
+import org.apache.flink.util.Preconditions;
 import org.apache.sn.task.engine.window.WindowAssigner;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Data
 public class Rule {
@@ -57,9 +59,14 @@ public class Rule {
         }
     }
 
-    public long getWindowStartFor(Long timestamp) {
-        Long ruleWindowMillis = getWindowMillis();
-        return (timestamp - ruleWindowMillis);
+    /**
+     * if the metric value can hit the rule
+     * @param metric metric value
+     * @return yes or not
+     */
+    public boolean isHit(Metric metric) {
+            Preconditions.checkNotNull(metric, "metric must not be null");
+            return Objects.equals(Rule.RuleState.ACTIVE, ruleState) && metric.getTags().keySet().containsAll(groupingKeyNames);
     }
 
     public enum AggregatorFunctionType {
