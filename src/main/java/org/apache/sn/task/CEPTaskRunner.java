@@ -2,18 +2,17 @@ package org.apache.sn.task;
 
 import com.alibaba.fastjson.JSONObject;
 import lombok.SneakyThrows;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.sn.task.engine.CEPEngine;
+import org.apache.sn.task.engine.CEPEngine2;
+import org.apache.sn.task.engine.PartitionEngine;
 import org.apache.sn.task.model.Metric;
 import org.apache.sn.task.model.Rule;
 
@@ -25,9 +24,10 @@ public class CEPTaskRunner {
 
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(new Configuration());
-        env.setStateBackend(new FsStateBackend("file:///Users/lihongyuinfo/Sources/flink-cep-task/checkpoints"));
-        env.setRestartStrategy(RestartStrategies.failureRateRestart(3, Time.of(4, TimeUnit.MINUTES), Time.of(10,TimeUnit.SECONDS)));
-        env.enableCheckpointing(30000);
+//        env.setStateBackend(new FsStateBackend("file:///Users/lihongyuinfo/Sources/flink-cep-task/checkpoints"));
+        env.setRestartStrategy(RestartStrategies.failureRateRestart(10, Time.of(4, TimeUnit.SECONDS), Time.of(10,TimeUnit.SECONDS)));
+//        env.enableCheckpointing(120000);
+//        env.setBufferTimeout(120000);
         DataStreamSource<String> metricSource = env.socketTextStream("127.0.0.1", 9999);
         SingleOutputStreamOperator<Metric> metricStream = metricSource
                 .map(CEPTaskRunner::parseMetric).name("parseMetric")
@@ -41,9 +41,12 @@ public class CEPTaskRunner {
                 .broadcast(ruleStateDescriptor);
         //join the metric stream and rule stream
         metricStream
-                .keyBy(metric -> StringUtils.join(metric.getTags().values(), "_"))
                 .connect(ruleBroadcastStream)
-                .process(new CEPEngine()).name("cep_engine")
+                .process(new PartitionEngine()).name("partition_engine")
+                .keyBy(Metric::getGroupId)
+                .flatMap(new CEPEngine2())
+//                .connect(ruleBroadcastStream)
+//                .process(new CEPEngine()).name("cep_engine")
                 .print()
                 .disableChaining();
         env.execute("cep-task");

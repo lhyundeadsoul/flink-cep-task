@@ -11,6 +11,8 @@ public class Metric {
     private Map<String, String> tags = Maps.newHashMap();
     private Map<String, BigDecimal> metrics = Maps.newHashMap();
     private long eventTime;
+    private String groupId;
+    private Rule rule;
 
     public String getTag(String name) {
         return tags.get(name);
