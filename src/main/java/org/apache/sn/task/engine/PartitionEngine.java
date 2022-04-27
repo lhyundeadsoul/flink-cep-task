@@ -55,7 +55,6 @@ public class PartitionEngine extends BroadcastProcessFunction<Metric, Rule, Metr
         BroadcastState<Integer, Rule> bcState = ctx.getBroadcastState(patternDesc);
         //remove the rule's data and resource when state is delete
         if (Objects.equals(Rule.RuleState.DELETE, rule.getRuleState())) {
-            bcState.get(rule.getRuleId()).getWindowAssignerMap().clear();
             bcState.remove(rule.getRuleId());
         } else {
             //active and pause is still in the state
