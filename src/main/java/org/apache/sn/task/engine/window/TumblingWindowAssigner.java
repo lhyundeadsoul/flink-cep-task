@@ -15,6 +15,10 @@ public class TumblingWindowAssigner<IN extends Metric> extends WindowAssigner<IN
         super(rule, out);
     }
 
+    public TumblingWindowAssigner(Rule rule) {
+        super(rule);
+    }
+
     @Override
     public List<Window> createWindowIfNecessary(IN in) {
         long begin;
@@ -27,7 +31,7 @@ public class TumblingWindowAssigner<IN extends Metric> extends WindowAssigner<IN
         } else {
             //there is already some windows
             begin = in.getEventTime() - (in.getEventTime() - earliestTimestamp) % rule.getWindowMillis();
-            if (in.getEventTime() > earliestTimestamp) {
+            if (in.getEventTime() >= earliestTimestamp) {
                 end = begin + rule.getWindowMillis();
             } else {
                 end = begin - rule.getWindowMillis();

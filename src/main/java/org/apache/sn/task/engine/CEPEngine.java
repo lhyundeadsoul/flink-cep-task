@@ -2,12 +2,8 @@ package org.apache.sn.task.engine;
 
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.flink.api.common.state.BroadcastState;
-import org.apache.flink.api.common.state.MapStateDescriptor;
-import org.apache.flink.api.common.state.ReadOnlyBroadcastState;
-import org.apache.flink.api.common.typeinfo.Types;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.co.KeyedBroadcastProcessFunction;
+import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.shaded.guava18.com.google.common.collect.Maps;
 import org.apache.flink.util.Collector;
 import org.apache.sn.task.engine.window.AllWindowAssigner;
 import org.apache.sn.task.engine.window.SlidingWindowAssigner;
@@ -18,7 +14,6 @@ import org.apache.sn.task.model.Rule;
 
 import java.math.BigDecimal;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Functionality
@@ -38,52 +33,15 @@ import java.util.Objects;
  *              `rule3 --> ....
  * all the window from one window assigner share the same origin value list(if needed)
  */
-public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rule, BigDecimal> {
-    // broadcast state descriptor
-    MapStateDescriptor<Integer, Rule> patternDesc;
+public class CEPEngine implements FlatMapFunction<Metric, BigDecimal> {
 
+    //window assigner(a stateful object) for each group in this operator
+    private final Map<String, WindowAssigner<Metric>> windowAssignerMap = Maps.newHashMap();
     @Override
-    public void open(Configuration conf) {
-        patternDesc = new MapStateDescriptor<>("rules-desc", Types.INT, Types.POJO(Rule.class));
-    }
-
-    /**
-     * deal with the metric value
-     *
-     * @param metric metric value
-     * @param ctx   broadcast context
-     * @param out   output pipeline
-     * @throws Exception exception
-     */
-    @Override
-    public void processElement(Metric metric, KeyedBroadcastProcessFunction<String, Metric, Rule, BigDecimal>.ReadOnlyContext ctx, Collector<BigDecimal> out) throws Exception {
-        //get all the rules
-        ReadOnlyBroadcastState<Integer, Rule> broadcastState = ctx.getBroadcastState(patternDesc);
-        Integer ruleId = Integer.parseInt(metric.getGroupId().split("_")[0]);
-        Rule rule = broadcastState.get(ruleId);
+    public void flatMap(Metric metric, Collector<BigDecimal> out) throws Exception {
+        Rule rule = metric.getRule();
         getWindowAssigner(rule, metric.getGroupId(), out)
                 .assignWindow(metric);
-    }
-
-    /**
-     * deal with the rule data
-     *
-     * @param rule rule value
-     * @param ctx  broadcast context
-     * @param out  output
-     * @throws Exception exception
-     */
-    @Override
-    public void processBroadcastElement(Rule rule, KeyedBroadcastProcessFunction<String, Metric, Rule, BigDecimal>.Context ctx, Collector<BigDecimal> out) throws Exception {
-        BroadcastState<Integer, Rule> bcState = ctx.getBroadcastState(patternDesc);
-        //remove the rule's data and resource when state is delete
-        if (Objects.equals(Rule.RuleState.DELETE, rule.getRuleState())) {
-            bcState.get(rule.getRuleId()).getWindowAssignerMap().clear();
-            bcState.remove(rule.getRuleId());
-        } else {
-            //active and pause is still in the state
-            bcState.put(rule.getRuleId(), rule);
-        }
     }
 
     /**
@@ -96,7 +54,6 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
      */
     private WindowAssigner<Metric> getWindowAssigner(Rule rule, String groupId, Collector<BigDecimal> out) {
         WindowAssigner<Metric> windowAssigner;
-        Map<String, WindowAssigner<Metric>> windowAssignerMap = rule.getWindowAssignerMap();
         if (MapUtils.isNotEmpty(windowAssignerMap) && windowAssignerMap.containsKey(groupId)) {
             windowAssigner = windowAssignerMap.get(groupId);
         } else {
@@ -124,5 +81,4 @@ public class CEPEngine extends KeyedBroadcastProcessFunction<String, Metric, Rul
         }
         return windowAssigner;
     }
-
 }

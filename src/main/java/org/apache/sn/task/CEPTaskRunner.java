@@ -11,7 +11,7 @@ import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.sn.task.engine.CEPEngine2;
+import org.apache.sn.task.engine.CEPEngine;
 import org.apache.sn.task.engine.PartitionEngine;
 import org.apache.sn.task.model.Metric;
 import org.apache.sn.task.model.Rule;
@@ -44,9 +44,7 @@ public class CEPTaskRunner {
                 .connect(ruleBroadcastStream)
                 .process(new PartitionEngine()).name("partition_engine")
                 .keyBy(Metric::getGroupId)
-                .flatMap(new CEPEngine2())
-//                .connect(ruleBroadcastStream)
-//                .process(new CEPEngine()).name("cep_engine")
+                .flatMap(new CEPEngine())
                 .print()
                 .disableChaining();
         env.execute("cep-task");

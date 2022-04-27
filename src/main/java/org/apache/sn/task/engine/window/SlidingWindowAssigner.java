@@ -16,6 +16,10 @@ public class SlidingWindowAssigner<IN extends Metric> extends WindowAssigner<IN>
         super(rule, out);
     }
 
+    public SlidingWindowAssigner(Rule rule) {
+        super(rule);
+    }
+
     @Override
     public List<Window> createWindowIfNecessary(IN in) {
         List<Window> newWindowList = null;

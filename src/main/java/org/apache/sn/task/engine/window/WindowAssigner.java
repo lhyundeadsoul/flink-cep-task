@@ -39,8 +39,16 @@ public abstract class WindowAssigner<IN extends Metric> {
      */
     final TreeMap<Long, BigDecimal> originValues = new TreeMap<>();
 
+    public WindowAssigner(Rule rule) {
+        this.rule = rule;
+    }
+
     public WindowAssigner(Rule rule, Collector<BigDecimal> out) {
         this.rule = rule;
+        this.out = out;
+    }
+
+    public void setOut(Collector<BigDecimal> out) {
         this.out = out;
     }
     /**
@@ -65,8 +73,8 @@ public abstract class WindowAssigner<IN extends Metric> {
                 Trigger trigger = new Trigger(window);
                 triggerCenter.register(trigger);
             });
+            windowList.addAll(newWindowList);
         }
-        windowList.addAll(newWindowList);
         //if hit window, receive it
         return windowList.stream()
                 .filter(window -> window.isHit(in.getEventTime()))

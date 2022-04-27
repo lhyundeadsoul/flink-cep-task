@@ -32,20 +32,16 @@ public class TriggerCenter {
         Executors.newSingleThreadScheduledExecutor()
                 .scheduleAtFixedRate(
                         () -> {
-                            try {
-                                //get all triggers whoes time is up
-                                NavigableMap<Long, Collection<Trigger>> triggerMap = triggerRegister.asMap().headMap(System.currentTimeMillis(), Boolean.TRUE);
-                                if (MapUtils.isNotEmpty(triggerMap)) {
-                                    //trigger all
-                                    triggerMap.values().stream().parallel()
-                                            .flatMap(Collection::stream)
-                                            .forEach(Trigger::trigger);
-                                    //remove these triggers
-                                    triggerMap.keySet()
-                                            .forEach(triggerRegister::removeAll);
-                                }
-                            } catch (Exception e) {
-                                System.err.println(e);
+                            //get all triggers whoes time is up
+                            NavigableMap<Long, Collection<Trigger>> triggerMap = triggerRegister.asMap().headMap(System.currentTimeMillis(), Boolean.TRUE);
+                            if (MapUtils.isNotEmpty(triggerMap)) {
+                                //trigger all
+                                triggerMap.values().stream().parallel()
+                                        .flatMap(Collection::stream)
+                                        .forEach(Trigger::trigger);
+                                //remove these triggers
+                                triggerMap.keySet()
+                                        .forEach(triggerRegister::removeAll);
                             }
 
                         },
